@@ -30,7 +30,7 @@
         #game-info {
             position: absolute;
             top: 25px;
-            width: 800px; /* Default width, will be overridden by JS/media queries */
+            width: 800px; /* Default width, will be overridden by media queries for mobile */
             display: flex;
             justify-content: space-between;
             padding: 10px 0;
@@ -327,7 +327,6 @@
         const leftControlBtn = document.getElementById('left-control-btn');
         const rightControlBtn = document.getElementById('right-control-btn');
 
-
         // Game state variables
         let score = 0;
         let initialGameDuration = 60;
@@ -344,39 +343,38 @@
         let lifelines = [];
         let particles = [];
 
-        // --- Original Game Constants (for scaling) ---
+        // --- Original Game Constants (all values define the game in a 800x600 logical space) ---
         const ORIGINAL_CANVAS_WIDTH = 800;
         const ORIGINAL_CANVAS_HEIGHT = 600;
 
         const BASKET_ORIGINAL_WIDTH = 120;
         const BASKET_ORIGINAL_HEIGHT = 25;
-        const BASKET_ORIGINAL_Y_OFFSET = 40; // Distance from bottom of canvas
+        const BASKET_ORIGINAL_Y_OFFSET = 40; // Distance from bottom of original canvas
         const BASKET_ORIGINAL_SPEED = 8;
 
         const STAR_MIN_ORIGINAL_RADIUS = 10;
         const STAR_MAX_ORIGINAL_RADIUS = 15;
-        const STAR_ORIGINAL_SPEED = 2;
+        const STAR_ORIGINAL_SPEED = 2; // Initial speed
 
         const LIFELINE_ORIGINAL_SIZE = 25;
         const LIFELINE_ORIGINAL_SPEED = 2;
-        const LIFELINE_ORIGINAL_SPAWN_RATE = 15000; // Original spawn rate
+        const LIFELINE_ORIGINAL_SPAWN_RATE = 15000; // Original spawn rate for lifelines
 
-        // Game difficulty (original values)
-        const ORIGINAL_STAR_SPAWN_RATE = 1000;
-        const MIN_ORIGINAL_SPAWN_RATE = 300;
-        const SPAWN_RATE_DECREASE_STEP = 30;
-        const DIFFICULTY_INCREASE_INTERVAL = 10;
-        const STAR_SPEED_INCREASE_STEP = 0.1;
+        // Game difficulty (original values, will be applied *before* scaling for movement)
+        let currentStarSpawnRate = 1000; // Milliseconds per star (starts at 1 star/sec)
+        const MIN_ORIGINAL_SPAWN_RATE = 300; // Fastest minimum spawn rate for challenge
+        const SPAWN_RATE_DECREASE_STEP = 30; // How much to decrease spawn rate over time
+        const DIFFICULTY_INCREASE_INTERVAL = 10; // Increase difficulty every X seconds
+        const STAR_SPEED_INCREASE_STEP = 0.1; // How much star speed increases
 
-        // Current game values (will be scaled)
+        // Current game values (stored in ORIGINAL coordinates)
         let basket = {
-            x: 0, y: 0, width: 0, height: 0, speed: 0, color: '#8B4513'
+            x: 0, y: 0, width: BASKET_ORIGINAL_WIDTH, height: BASKET_ORIGINAL_HEIGHT, speed: BASKET_ORIGINAL_SPEED, color: '#8B4513'
         };
         let currentStarSpeed = STAR_ORIGINAL_SPEED;
-        let currentStarSpawnRate = ORIGINAL_STAR_SPAWN_RATE;
-        let currentLifelineSpawnRate = LIFELINE_ORIGINAL_SPAWN_RATE;
 
-        // --- Scaling Factors ---
+
+        // --- Scaling Factors (calculated based on actual canvas size) ---
         let scaleX = 1;
         let scaleY = 1;
 
@@ -405,7 +403,7 @@
 
             // Use 90% of viewport width and 70% of viewport height (to leave space for UI/controls)
             const maxGameAreaWidth = window.innerWidth * 0.9;
-            const maxGameAreaHeight = window.innerHeight * 0.7;
+            const maxGameAreaHeight = window.innerHeight * 0.7; // More space for mobile controls
 
             if (maxGameAreaWidth / maxGameAreaHeight > aspectRatio) {
                 // Window is wider than game, constrained by height
@@ -420,32 +418,26 @@
             canvas.width = newWidth;
             canvas.height = newHeight;
 
-            // Update scaling factors
+            // Update global scaling factors
             scaleX = canvas.width / ORIGINAL_CANVAS_WIDTH;
             scaleY = canvas.height / ORIGINAL_CANVAS_HEIGHT;
-
-            // Adjust basket position relative to new canvas size (scaled from original)
-            basket.width = BASKET_ORIGINAL_WIDTH * scaleX;
-            basket.height = BASKET_ORIGINAL_HEIGHT * scaleY;
-            basket.y = canvas.height - (BASKET_ORIGINAL_Y_OFFSET * scaleY);
-            basket.x = (canvas.width / 2) - (basket.width / 2); // Center basket horizontally
         }
 
-        // --- Drawing Functions (all apply scaling) ---
+        // --- Drawing Functions (all apply scaling for rendering) ---
         function drawBasket() {
             ctx.fillStyle = basket.color;
-            ctx.fillRect(basket.x, basket.y, basket.width, basket.height);
+            ctx.fillRect(basket.x * scaleX, basket.y * scaleY, basket.width * scaleX, basket.height * scaleY);
         }
 
         function drawStar(star) {
             ctx.save();
             ctx.fillStyle = '#FFFF00';
             ctx.strokeStyle = '#FFD700';
-            ctx.lineWidth = 2 * Math.min(scaleX, scaleY); // Scale line width too
+            ctx.lineWidth = 2 * Math.min(scaleX, scaleY); // Scale line width proportionally
 
             const x = star.x * scaleX;
             const y = star.y * scaleY;
-            const outerRadius = star.radius * Math.min(scaleX, scaleY);
+            const outerRadius = star.radius * Math.min(scaleX, scaleY); // Use min scale for circular items
             const innerRadius = outerRadius / 2.5;
             const numPoints = 5;
 
@@ -474,8 +466,9 @@
             ctx.beginPath();
             const x = heart.x * scaleX;
             const y = heart.y * scaleY;
-            const size = heart.size * Math.min(scaleX, scaleY);
+            const size = heart.size * Math.min(scaleX, scaleY); // Use min scale for circular items
 
+            // Heart shape drawing commands (relative to scaled x,y,size)
             ctx.moveTo(x, y + size / 4);
             ctx.quadraticCurveTo(x + size / 2, y - size / 2, x + size, y + size / 4);
             ctx.quadraticCurveTo(x + size, y + size, x, y + size);
@@ -490,19 +483,19 @@
 
         function drawBackground() {
             ctx.fillStyle = '#0d1a26';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillRect(0, 0, canvas.width, canvas.height); // Fill entire canvas
         }
 
         // Particle effect for catching
         function createParticles(originalX, originalY, color) {
-            // Particles are created at the scaled position, with scaled properties
             for (let i = 0; i < 10; i++) {
                 particles.push({
+                    // Particles' initial positions are scaled, velocities and radii are scaled too
                     x: originalX * scaleX,
                     y: originalY * scaleY,
                     radius: (Math.random() * 3 + 1) * Math.min(scaleX, scaleY),
                     color: color,
-                    vx: (Math.random() - 0.5) * 5 * scaleX, // Scale velocity
+                    vx: (Math.random() - 0.5) * 5 * scaleX, // Scale velocity according to axis
                     vy: (Math.random() - 0.5) * 5 * scaleY,
                     alpha: 1
                 });
@@ -536,25 +529,26 @@
             });
         }
 
-        // --- Game Logic Functions ---
+        // --- Game Logic Functions (all operate on ORIGINAL coordinates) ---
+
         function updateBasket() {
             let moving = false;
-            // Basket movement is based on original speed, then multiplied by scaleX
+            // Movement applied to original X, then scaled by current scaleX for visual speed
             if (keys['ArrowLeft'] || keys['a']) {
-                basket.x -= BASKET_ORIGINAL_SPEED;
+                basket.x -= basket.speed; // basket.speed is ORIGINAL_BASKET_SPEED
                 moving = true;
             }
             if (keys['ArrowRight'] || keys['d']) {
-                basket.x += BASKET_ORIGINAL_SPEED;
+                basket.x += basket.speed;
                 moving = true;
             }
 
-            // Keep basket within original canvas bounds (then it will be scaled for drawing)
+            // Keep basket within original canvas bounds
             if (basket.x < 0) {
                 basket.x = 0;
             }
-            if (basket.x + BASKET_ORIGINAL_WIDTH > ORIGINAL_CANVAS_WIDTH) {
-                basket.x = ORIGINAL_CANVAS_WIDTH - BASKET_ORIGINAL_WIDTH;
+            if (basket.x + basket.width > ORIGINAL_CANVAS_WIDTH) {
+                basket.x = ORIGINAL_CANVAS_WIDTH - basket.width;
             }
 
             basket.color = moving ? '#A0522D' : '#8B4513';
@@ -566,9 +560,9 @@
             stars.push({
                 type: 'star',
                 x: x,
-                y: -radius,
+                y: -radius, // Start above original canvas
                 radius: radius,
-                speed: currentStarSpeed // This currentStarSpeed is already scaled below
+                speed: currentStarSpeed // currentStarSpeed is an ORIGINAL value
             });
         }
 
@@ -577,23 +571,24 @@
             lifelines.push({
                 type: 'lifeline',
                 x: x,
-                y: -LIFELINE_ORIGINAL_SIZE,
+                y: -LIFELINE_ORIGINAL_SIZE, // Start above original canvas
                 size: LIFELINE_ORIGINAL_SIZE,
-                speed: LIFELINE_ORIGINAL_SPEED * scaleY // Scale lifeline speed directly
+                speed: LIFELINE_ORIGINAL_SPEED // LIFELINE_ORIGINAL_SPEED is an ORIGINAL value
             });
         }
 
         function updateFallingObjects() {
             // Update Stars
             for (let i = 0; i < stars.length; i++) {
-                stars[i].y += stars[i].speed; // Star speed is already scaled at game start
+                // Apply scaled speed to original Y position
+                stars[i].y += stars[i].speed * scaleY;
 
-                // Collision detection with basket (using original coordinates for calculations)
+                // Collision detection with basket (all calculations in ORIGINAL coordinates)
                 if (
-                    stars[i].y + stars[i].radius > (basket.y / scaleY) && // Compare original Y with scaled basket Y
-                    stars[i].y - stars[i].radius < (basket.y + basket.height) / scaleY &&
-                    stars[i].x + stars[i].radius > (basket.x / scaleX) &&
-                    stars[i].x - stars[i].radius < (basket.x + basket.width) / scaleX
+                    stars[i].y + stars[i].radius > basket.y &&
+                    stars[i].y - stars[i].radius < basket.y + basket.height &&
+                    stars[i].x + stars[i].radius > basket.x &&
+                    stars[i].x - stars[i].radius < basket.x + basket.width
                 ) {
                     score++;
                     scoreDisplay.textContent = `SCORE: ${score}`;
@@ -614,14 +609,15 @@
 
             // Update Lifelines
             for (let i = 0; i < lifelines.length; i++) {
-                lifelines[i].y += lifelines[i].speed;
+                // Apply scaled speed to original Y position
+                lifelines[i].y += lifelines[i].speed * scaleY;
 
-                // Collision detection with basket for lifelines
+                // Collision detection with basket for lifelines (all calculations in ORIGINAL coordinates)
                 if (
-                    lifelines[i].y + lifelines[i].size > (basket.y / scaleY) &&
-                    lifelines[i].y < (basket.y + basket.height) / scaleY &&
-                    lifelines[i].x + lifelines[i].size > (basket.x / scaleX) &&
-                    lifelines[i].x < (basket.x + basket.width) / scaleX
+                    lifelines[i].y + lifelines[i].size > basket.y &&
+                    lifelines[i].y < basket.y + basket.height &&
+                    lifelines[i].x + lifelines[i].size > basket.x &&
+                    lifelines[i].x < basket.x + basket.width
                 ) {
                     if (currentLifelines < maxLifelines) {
                         currentLifelines++;
@@ -667,7 +663,7 @@
             } else {
                 gameInterval = setInterval(gameTimer, 1000);
                 starSpawnInterval = setInterval(spawnStar, currentStarSpawnRate);
-                lifelineSpawnInterval = setInterval(spawnLifeline, currentLifelineSpawnRate); // Use currentLifelineSpawnRate
+                lifelineSpawnInterval = setInterval(spawnLifeline, LIFELINE_ORIGINAL_SPAWN_RATE); // Use original spawn rate here
                 pauseButton.textContent = 'Pause';
                 requestAnimationFrame(gameLoop);
             }
@@ -694,7 +690,7 @@
                     clearInterval(starSpawnInterval);
                     starSpawnInterval = setInterval(spawnStar, currentStarSpawnRate);
                 }
-                currentStarSpeed += STAR_SPEED_INCREASE_STEP * scaleY; // Scale speed increase
+                currentStarSpeed += STAR_SPEED_INCREASE_STEP; // Increase original speed value
             }
         }
 
@@ -722,16 +718,17 @@
             gameRunning = true;
             gamePaused = false;
 
-            // Reset game values based on original constants and current scale
+            // Reset game values to their original definitions
             currentStarSpawnRate = ORIGINAL_STAR_SPAWN_RATE;
-            currentStarSpeed = STAR_ORIGINAL_SPEED * scaleY; // Scale initial star speed
-            currentLifelineSpawnRate = LIFELINE_ORIGINAL_SPAWN_RATE; // Lifeline spawn rate is not scaled by visual scale
-
-            basket.width = BASKET_ORIGINAL_WIDTH * scaleX;
-            basket.height = BASKET_ORIGINAL_HEIGHT * scaleY;
-            basket.y = canvas.height - (BASKET_ORIGINAL_Y_OFFSET * scaleY);
-            basket.x = (canvas.width / 2) - (basket.width / 2); // Center basket
-            basket.speed = BASKET_ORIGINAL_SPEED * scaleX; // Scale basket speed
+            currentStarSpeed = STAR_ORIGINAL_SPEED; // Reset to original unscaled speed
+            
+            // Reset basket to its original logical state
+            basket.x = (ORIGINAL_CANVAS_WIDTH / 2) - (BASKET_ORIGINAL_WIDTH / 2);
+            basket.y = ORIGINAL_CANVAS_HEIGHT - BASKET_ORIGINAL_Y_OFFSET;
+            basket.width = BASKET_ORIGINAL_WIDTH;
+            basket.height = BASKET_ORIGINAL_HEIGHT;
+            basket.speed = BASKET_ORIGINAL_SPEED;
+            basket.color = '#8B4513';
 
             scoreDisplay.textContent = `SCORE: ${score}`;
             lifelinesDisplay.textContent = `LIFELINES: ${currentLifelines}`;
@@ -746,7 +743,7 @@
 
             gameInterval = setInterval(gameTimer, 1000);
             starSpawnInterval = setInterval(spawnStar, currentStarSpawnRate);
-            lifelineSpawnInterval = setInterval(spawnLifeline, currentLifelineSpawnRate);
+            lifelineSpawnInterval = setInterval(spawnLifeline, LIFELINE_ORIGINAL_SPAWN_RATE);
 
             requestAnimationFrame(gameLoop);
         }
@@ -785,20 +782,17 @@
         pauseButton.addEventListener('click', togglePause);
 
         // Mobile touch controls
+        // Using preventDefault() to stop unwanted browser behaviors like scrolling/zooming
         leftControlBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys['ArrowLeft'] = true; });
         leftControlBtn.addEventListener('touchend', (e) => { e.preventDefault(); keys['ArrowLeft'] = false; });
-        leftControlBtn.addEventListener('touchcancel', (e) => { e.preventDefault(); keys['ArrowLeft'] = false; });
+        leftControlBtn.addEventListener('touchcancel', (e) => { e.preventDefault(); keys['ArrowLeft'] = false; }); // For when touch leaves button area
 
         rightControlBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys['ArrowRight'] = true; });
         rightControlBtn.addEventListener('touchend', (e) => { e.preventDefault(); keys['ArrowRight'] = false; });
         rightControlBtn.addEventListener('touchcancel', (e) => { e.preventDefault(); keys['ArrowRight'] = false; });
 
         // Initial setup on page load
-        window.addEventListener('load', () => {
-            resizeCanvas(); // Set initial canvas size
-            // Initial basket position is set in resizeCanvas and startGame.
-            // Game start is triggered by user.
-        });
+        window.addEventListener('load', resizeCanvas); // Set initial canvas size
         window.addEventListener('resize', resizeCanvas); // Adjust canvas on window resize
     </script>
 </body>
