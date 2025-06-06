@@ -2,73 +2,109 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Tic Tac Toe vs Bot</title>
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
-      background: #0f0f0f;
+      background: linear-gradient(to right, #141e30, #243b55);
       color: #fff;
       text-align: center;
       padding: 20px;
+      margin: 0;
     }
     h1 {
       margin-bottom: 10px;
+      font-size: 2.5em;
+    }
+    #difficultySelector {
+      margin-bottom: 20px;
+    }
+    select {
+      padding: 8px 12px;
+      font-size: 1em;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     }
     #board {
       display: grid;
-      grid-template-columns: repeat(3, 100px);
-      grid-gap: 10px;
-      justify-content: center;
-      margin: 20px auto;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      max-width: 320px;
+      margin: 0 auto 30px;
     }
     .cell {
-      width: 100px;
-      height: 100px;
-      background-color: #1e88e5;
+      aspect-ratio: 1 / 1;
+      background: linear-gradient(145deg, #1e88e5, #1565c0);
       font-size: 2.5em;
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 12px;
+      border-radius: 16px;
       cursor: pointer;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+      transition: background 0.3s, transform 0.2s;
+      user-select: none;
+    }
+    .cell:hover:not(.taken) {
+      background-color: #1976d2;
+      transform: scale(1.05);
     }
     .cell.taken {
       pointer-events: none;
-      background-color: #1565c0;
+      background-color: #0d47a1;
     }
     #status {
-      font-size: 1.2em;
-      margin-top: 10px;
+      font-size: 1.3em;
+      margin-top: 20px;
+      min-height: 1.5em;
     }
     button {
-      margin-top: 15px;
-      padding: 10px 20px;
+      margin-top: 20px;
+      padding: 12px 24px;
+      font-size: 1em;
       background-color: #43a047;
       border: none;
       color: white;
-      border-radius: 8px;
+      border-radius: 10px;
       cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      transition: background 0.3s;
     }
     button:hover {
       background-color: #2e7d32;
     }
     footer {
-      margin-top: 30px;
+      margin-top: 40px;
       font-size: 0.9em;
-      color: #888;
+      color: #bbb;
     }
     @media (max-width: 400px) {
+      #board {
+        max-width: 260px;
+        gap: 10px;
+      }
       .cell {
-        width: 80px;
-        height: 80px;
         font-size: 2em;
+        border-radius: 12px;
       }
     }
   </style>
 </head>
 <body>
   <h1>🤖 Tic Tac Toe vs Bot</h1>
+
+  <div id="difficultySelector">
+    Difficulty:
+    <select id="difficulty" onchange="startGame()">
+      <option value="easy">Easy</option>
+      <option value="medium" selected>Medium</option>
+      <option value="hard">Hard</option>
+    </select>
+  </div>
+
   <div id="board"></div>
   <div id="status"></div>
   <button onclick="startGame()">Restart Game</button>
@@ -80,6 +116,8 @@
   <script>
     const board = document.getElementById('board');
     const statusText = document.getElementById('status');
+    const difficultySelect = document.getElementById('difficulty');
+
     let cells = [];
     let gameOver = false;
 
@@ -100,8 +138,9 @@
     function handleClick(index) {
       if (cells[index] || gameOver) return;
       markCell(index, 'X');
-      if (checkWin('X')) return;
-      setTimeout(botMove, 500); // Delay for realism
+      if (checkWin('X') || gameOver) return;
+      statusText.textContent = "Bot thinking...";
+      setTimeout(botMove, 500);
     }
 
     function markCell(index, player) {
@@ -123,11 +162,26 @@
 
     function botMove() {
       if (gameOver) return;
-      let index = findBestMove();
+      let difficulty = difficultySelect.value;
+      let index;
+      if (difficulty === 'easy') {
+        index = easyMove();
+      } else if (difficulty === 'medium') {
+        index = mediumMove();
+      } else {
+        index = hardMove();
+      }
       markCell(index, 'O');
     }
 
-    function findBestMove() {
+    // Easy: random move
+    function easyMove() {
+      const available = cells.map((v,i) => v === '' ? i : null).filter(i => i !== null);
+      return available[Math.floor(Math.random() * available.length)];
+    }
+
+    // Medium: your current smart logic
+    function mediumMove() {
       // 1. Win if possible
       for (let i = 0; i < 9; i++) {
         if (!cells[i]) {
@@ -153,14 +207,62 @@
       return cells.findIndex(cell => cell === '');
     }
 
-    function checkWin(player) {
+    // Hard: minimax algorithm for unbeatable AI
+    function hardMove() {
+      let bestScore = -Infinity;
+      let move = -1;
+      for (let i = 0; i < 9; i++) {
+        if (cells[i] === '') {
+          cells[i] = 'O';
+          let score = minimax(cells, false);
+          cells[i] = '';
+          if (score > bestScore) {
+            bestScore = score;
+            move = i;
+          }
+        }
+      }
+      return move;
+    }
+
+    function minimax(boardState, isMaximizing) {
+      if (checkWinSilent('O', boardState)) return 10;
+      if (checkWinSilent('X', boardState)) return -10;
+      if (boardState.every(cell => cell !== '')) return 0;
+
+      if (isMaximizing) {
+        let bestScore = -Infinity;
+        for (let i = 0; i < 9; i++) {
+          if (boardState[i] === '') {
+            boardState[i] = 'O';
+            let score = minimax(boardState, false);
+            boardState[i] = '';
+            bestScore = Math.max(score, bestScore);
+          }
+        }
+        return bestScore;
+      } else {
+        let bestScore = Infinity;
+        for (let i = 0; i < 9; i++) {
+          if (boardState[i] === '') {
+            boardState[i] = 'X';
+            let score = minimax(boardState, true);
+            boardState[i] = '';
+            bestScore = Math.min(score, bestScore);
+          }
+        }
+        return bestScore;
+      }
+    }
+
+    function checkWin(player, boardToCheck = cells) {
       const wins = [
         [0,1,2],[3,4,5],[6,7,8],
         [0,3,6],[1,4,7],[2,5,8],
         [0,4,8],[2,4,6]
       ];
       return wins.some(([a,b,c]) => {
-        if (cells[a] === player && cells[b] === player && cells[c] === player) {
+        if (boardToCheck[a] === player && boardToCheck[b] === player && boardToCheck[c] === player) {
           [a,b,c].forEach(i => board.children[i].style.backgroundColor = '#4caf50');
           return true;
         }
@@ -168,13 +270,13 @@
       });
     }
 
-    function checkWinSilent(player) {
+    function checkWinSilent(player, boardToCheck = cells) {
       const wins = [
         [0,1,2],[3,4,5],[6,7,8],
         [0,3,6],[1,4,7],[2,5,8],
         [0,4,8],[2,4,6]
       ];
-      return wins.some(([a,b,c]) => cells[a] === player && cells[b] === player && cells[c] === player);
+      return wins.some(([a,b,c]) => boardToCheck[a] === player && boardToCheck[b] === player && boardToCheck[c] === player);
     }
 
     startGame();
