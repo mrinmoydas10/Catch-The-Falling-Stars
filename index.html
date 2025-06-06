@@ -1,872 +1,183 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Falling Stars</title>
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            background: linear-gradient(to bottom, #1a2a3a, #0d1a26);
-            overflow: hidden;
-            font-family: 'Verdana', 'Geneva', 'Tahoma', sans-serif;
-            color: #ecf0f1;
-            flex-direction: column;
-            position: relative; /* Needed for absolute positioning of canvas-controls */
-        }
-
-        #game-container {
-            position: relative; /* To contain the canvas and its overlays */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            /* The actual canvas dimensions will be set by JS resizeCanvas */
-        }
-
-        canvas {
-            background-color: #0d1a26;
-            border: 5px solid #4a90e2;
-            box-shadow: 0 0 25px rgba(74, 144, 226, 0.9);
-            border-radius: 8px;
-            display: block;
-            z-index: 1; /* Ensure canvas is behind controls */
-        }
-
-        /* --- Control Areas (Left/Right bars over canvas) --- */
-        .canvas-control-area {
-            position: absolute;
-            top: 0;
-            height: 100%; /* Full height of the game container */
-            width: 50%;   /* Half width each */
-            z-index: 5; /* Above canvas, below game info/pause */
-            background-color: transparent; /* Invisible by default */
-            cursor: pointer;
-            touch-action: manipulation; /* Prevent scrolling/zooming */
-            transition: background-color 0.1s ease;
-        }
-
-        #left-canvas-control {
-            left: 0;
-        }
-
-        #right-canvas-control {
-            right: 0;
-        }
-
-        .canvas-control-area:active {
-            background-color: rgba(74, 144, 226, 0.15); /* Subtle visual feedback */
-        }
-        /* --- End Control Areas --- */
-
-
-        #game-info {
-            position: absolute;
-            top: 25px;
-            width: 800px; /* Default width, will be overridden by media queries for mobile */
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            font-size: 1.4em;
-            color: #f1c40f;
-            text-shadow: 1px 1px 3px rgba(0,0,0,0.6);
-            pointer-events: none; /* Allows clicks to pass through to canvas controls if needed */
-            font-weight: bold;
-            box-sizing: border-box;
-            z-index: 10; /* Ensure it's above canvas controls */
-        }
-
-        #lifelines-display {
-            color: #e74c3c;
-            text-shadow: 1px 1px 3px rgba(0,0,0,0.6);
-        }
-
-        .screen-overlay {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background-color: rgba(0, 0, 0, 0.9);
-            padding: 40px 60px;
-            border-radius: 18px;
-            text-align: center;
-            color: #ecf0f1;
-            font-size: 1.8em;
-            box-shadow: 0 0 40px rgba(74, 144, 226, 0.8);
-            z-index: 10; /* Ensure it's above everything else */
-            display: flex;
-            flex-direction: column;
-            gap: 25px;
-            box-sizing: border-box;
-            max-width: 90%;
-        }
-
-        .screen-overlay h2 {
-            margin-bottom: 15px;
-            color: #e74c3c;
-            font-size: 1.5em;
-        }
-
-        #final-score {
-            font-size: 1.3em;
-            margin-bottom: 25px;
-            color: #f1c40f;
-            font-weight: bold;
-        }
-
-        .game-btn {
-            background-color: #28a745;
-            color: white;
-            border: none;
-            padding: 14px 28px;
-            font-size: 1.1em;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background-color 0.3s ease, transform 0.2s ease;
-            margin: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-        }
-
-        .game-btn:hover {
-            background-color: #218838;
-            transform: translateY(-2px);
-        }
-
-        .game-btn:active {
-            transform: translateY(0);
-            box-shadow: 0 2px 3px rgba(0,0,0,0.2);
-        }
-
-        #start-screen {
-            display: flex;
-        }
-
-        #game-duration-input {
-            padding: 12px;
-            font-size: 1.1em;
-            border-radius: 6px;
-            border: 1px solid #4a90e2;
-            background-color: #2c3e50;
-            color: #ecf0f1;
-            width: 120px;
-            text-align: center;
-            box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
-        }
-
-        .input-group {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .input-group label {
-            font-size: 1em;
-            cursor: pointer;
-        }
-
-        .input-group input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-            accent-color: #4a90e2;
-        }
-
-        #copyright {
-            margin-top: 25px;
-            font-size: 0.75em;
-            color: #95a5a6;
-        }
-
-        #pause-button {
-            position: absolute;
-            top: 25px;
-            left: 25px;
-            background-color: rgba(74, 144, 226, 0.7);
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            font-size: 1em;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-            z-index: 10;
-            display: none;
-        }
-
-        #pause-button:hover {
-            background-color: rgba(74, 144, 226, 1);
-        }
-
-        /* --- Mobile Controls (explicit buttons for smaller screens) --- */
-        #mobile-controls {
-            display: none; /* Hidden by default */
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 80px;
-            background-color: rgba(0, 0, 0, 0.5);
-            justify-content: space-around;
-            align-items: center;
-            padding: 0 10px;
-            box-sizing: border-box;
-            z-index: 100;
-        }
-
-        .mobile-game-btn {
-            background-color: rgba(74, 144, 226, 0.7);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            font-size: 1.8em;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: background-color 0.2s, transform 0.1s;
-            user-select: none;
-            touch-action: manipulation;
-            flex-grow: 1;
-            margin: 0 5px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        }
-
-        .mobile-game-btn:active {
-            background-color: rgba(74, 144, 226, 1);
-            transform: scale(0.95);
-        }
-
-        /* --- Media Queries for Mobile Responsiveness --- */
-        @media (max-width: 850px) {
-            /* Show mobile controls */
-            #mobile-controls {
-                display: flex;
-            }
-
-            /* Hide on-canvas controls when explicit mobile buttons are shown to avoid overlap */
-            .canvas-control-area {
-                display: none;
-            }
-
-            /* Adjust game info positioning and size */
-            #game-info {
-                width: 90%;
-                font-size: 1.1em;
-                top: 15px;
-                left: 5%;
-            }
-
-            /* Adjust pause button positioning and size */
-            #pause-button {
-                top: 15px;
-                left: 15px;
-                padding: 8px 12px;
-                font-size: 0.9em;
-            }
-
-            /* Adjust overlay screens for smaller displays */
-            .screen-overlay {
-                padding: 25px 35px;
-                font-size: 1.4em;
-                gap: 15px;
-            }
-
-            .screen-overlay h2 {
-                font-size: 1.3em;
-            }
-
-            #final-score {
-                font-size: 1.1em;
-            }
-
-            .game-btn {
-                padding: 10px 20px;
-                font-size: 1em;
-                margin: 5px;
-            }
-
-            #game-duration-input {
-                padding: 8px;
-                font-size: 1em;
-                width: 100px;
-            }
-
-            .input-group {
-                gap: 10px;
-                margin-bottom: 15px;
-            }
-
-            #copyright {
-                margin-top: 15px;
-                font-size: 0.7em;
-            }
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tic Tac Toe vs Bot</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f0f0f;
+      color: #fff;
+      text-align: center;
+      padding: 20px;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    #board {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      grid-gap: 10px;
+      justify-content: center;
+      margin: 20px auto;
+    }
+    .cell {
+      width: 100px;
+      height: 100px;
+      background-color: #1e88e5;
+      font-size: 2.5em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      cursor: pointer;
+    }
+    .cell.taken {
+      pointer-events: none;
+      background-color: #1565c0;
+    }
+    #status {
+      font-size: 1.2em;
+      margin-top: 10px;
+    }
+    button {
+      margin-top: 15px;
+      padding: 10px 20px;
+      background-color: #43a047;
+      border: none;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #2e7d32;
+    }
+    footer {
+      margin-top: 30px;
+      font-size: 0.9em;
+      color: #888;
+    }
+    @media (max-width: 400px) {
+      .cell {
+        width: 80px;
+        height: 80px;
+        font-size: 2em;
+      }
+    }
+  </style>
 </head>
 <body>
-    <div id="game-info">
-        <div id="score">SCORE: 0</div>
-        <div id="lifelines-display">LIFELINES: 2</div>
-        <div id="timer">TIME: 0</div>
-    </div>
+  <h1>🤖 Tic Tac Toe vs Bot</h1>
+  <div id="board"></div>
+  <div id="status"></div>
+  <button onclick="startGame()">Restart Game</button>
 
-    <button id="pause-button">Pause</button>
+  <footer>
+    All rights reserved by Mrinmoy Das
+  </footer>
 
-    <div id="game-container">
-        <canvas id="gameCanvas"></canvas>
-        <div id="left-canvas-control" class="canvas-control-area"></div>
-        <div id="right-canvas-control" class="canvas-control-area"></div>
-    </div>
+  <script>
+    const board = document.getElementById('board');
+    const statusText = document.getElementById('status');
+    let cells = [];
+    let gameOver = false;
 
-    <div id="mobile-controls">
-        <button id="left-control-btn" class="mobile-game-btn">&lt;</button>
-        <button id="right-control-btn" class="mobile-game-btn">&gt;</button>
-    </div>
+    function startGame() {
+      board.innerHTML = '';
+      cells = Array(9).fill('');
+      gameOver = false;
+      statusText.textContent = "Your turn (X)";
 
-    <div id="start-screen" class="screen-overlay">
-        <h2>Falling Stars</h2>
-        <div class="input-group">
-            <label for="game-duration-input">Game Duration (seconds):</label>
-            <input type="number" id="game-duration-input" value="60" min="10" max="300">
-        </div>
-        <div class="input-group">
-            <input type="checkbox" id="limitless-time-checkbox">
-            <label for="limitless-time-checkbox">Limitless Time</label>
-        </div>
-        <button id="start-game-btn" class="game-btn">Start Game</button>
-    </div>
+      for (let i = 0; i < 9; i++) {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.addEventListener('click', () => handleClick(i));
+        board.appendChild(cell);
+      }
+    }
 
-    <div id="game-over-screen" class="screen-overlay" style="display: none;">
-        <h2 id="game-over-message">GAME OVER!</h2>
-        <div id="final-score">Your Score: 0</div>
-        <div>
-            <button id="play-again-btn" class="game-btn">Play Again</button>
-            <button id="retry-btn" class="game-btn">Retry</button>
-        </div>
-    </div>
+    function handleClick(index) {
+      if (cells[index] || gameOver) return;
+      markCell(index, 'X');
+      if (checkWin('X')) return;
+      setTimeout(botMove, 500); // Delay for realism
+    }
 
-    <div id="copyright">
-        <small>All rights reserved by Mrinmoy Das</small>
-    </div>
+    function markCell(index, player) {
+      cells[index] = player;
+      const cell = board.children[index];
+      cell.textContent = player;
+      cell.classList.add('taken');
 
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+      if (checkWin(player)) {
+        statusText.textContent = player === 'X' ? "🎉 You win!" : "🤖 Bot wins!";
+        gameOver = true;
+      } else if (cells.every(cell => cell)) {
+        statusText.textContent = "🤝 It's a draw!";
+        gameOver = true;
+      } else {
+        statusText.textContent = player === 'X' ? "Bot thinking..." : "Your turn (X)";
+      }
+    }
 
-        const scoreDisplay = document.getElementById('score');
-        const timerDisplay = document.getElementById('timer');
-        const lifelinesDisplay = document.getElementById('lifelines-display');
-        const gameOverScreen = document.getElementById('game-over-screen');
-        const gameOverMessage = document.getElementById('game-over-message');
-        const finalScoreDisplay = document.getElementById('final-score');
-        const playAgainBtn = document.getElementById('play-again-btn');
-        const retryBtn = document.getElementById('retry-btn');
-        const startScreen = document.getElementById('start-screen');
-        const startGameBtn = document.getElementById('start-game-btn');
-        const gameDurationInput = document.getElementById('game-duration-input');
-        const limitlessTimeCheckbox = document.getElementById('limitless-time-checkbox');
-        const pauseButton = document.getElementById('pause-button');
+    function botMove() {
+      if (gameOver) return;
+      let index = findBestMove();
+      markCell(index, 'O');
+    }
 
-        // Mobile controls elements (explicit buttons)
-        const mobileControlsDiv = document.getElementById('mobile-controls');
-        const leftControlBtn = document.getElementById('left-control-btn');
-        const rightControlBtn = document.getElementById('right-control-btn');
-
-        // New on-canvas control areas (left/right bars)
-        const leftCanvasControl = document.getElementById('left-canvas-control');
-        const rightCanvasControl = document.getElementById('right-canvas-control');
-        const gameContainer = document.getElementById('game-container'); // Need this to size canvas controls
-
-        // Game state variables
-        let score = 0;
-        let initialGameDuration = 60;
-        let timeLeft = initialGameDuration;
-        let isLimitlessTime = false;
-        const maxLifelines = 2;
-        let currentLifelines = maxLifelines;
-        let gameRunning = false;
-        let gamePaused = false;
-        let gameInterval;
-        let starSpawnInterval;
-        let lifelineSpawnInterval;
-        let stars = [];
-        let lifelines = [];
-        let particles = [];
-
-        // --- Original Game Constants (all values define the game in a 800x600 logical space) ---
-        const ORIGINAL_CANVAS_WIDTH = 800;
-        const ORIGINAL_CANVAS_HEIGHT = 600;
-
-        const BASKET_ORIGINAL_WIDTH = 120;
-        const BASKET_ORIGINAL_HEIGHT = 25;
-        const BASKET_ORIGINAL_Y_OFFSET = 40; // Distance from bottom of original canvas
-        const BASKET_ORIGINAL_SPEED = 8;
-
-        const STAR_MIN_ORIGINAL_RADIUS = 10;
-        const STAR_MAX_ORIGINAL_RADIUS = 15;
-        const STAR_ORIGINAL_SPEED = 2; // Initial speed
-
-        const LIFELINE_ORIGINAL_SIZE = 25;
-        const LIFELINE_ORIGINAL_SPEED = 2;
-        const LIFELINE_ORIGINAL_SPAWN_RATE = 15000; // Original spawn rate for lifelines
-
-        // Game difficulty (original values, will be applied *before* scaling for movement)
-        const ORIGINAL_STAR_SPAWN_RATE = 1000; // Milliseconds per star (starts at 1 star/sec)
-        const MIN_ORIGINAL_SPAWN_RATE = 300; // Fastest minimum spawn rate for challenge
-        const SPAWN_RATE_DECREASE_STEP = 30; // How much to decrease spawn rate over time
-        const DIFFICULTY_INCREASE_INTERVAL = 10; // Increase difficulty every X seconds
-        const STAR_SPEED_INCREASE_STEP = 0.1; // How much star speed increases
-
-        // Current game values (stored in ORIGINAL coordinates)
-        let basket = {
-            x: 0, y: 0, width: BASKET_ORIGINAL_WIDTH, height: BASKET_ORIGINAL_HEIGHT, speed: BASKET_ORIGINAL_SPEED, color: '#8B4513'
-        };
-        let currentStarSpeed = STAR_ORIGINAL_SPEED;
-
-
-        // --- Scaling Factors (calculated based on actual canvas size) ---
-        let scaleX = 1;
-        let scaleY = 1;
-
-        // Input handling
-        let keys = {};
-        document.addEventListener('keydown', (e) => {
-            keys[e.key] = true;
-            if (e.key === 'p' || e.key === 'P') {
-                togglePause();
-            }
-        });
-        document.addEventListener('keyup', (e) => {
-            keys[e.key] = false;
-        });
-
-        // Toggle visibility of duration input based on limitless checkbox
-        limitlessTimeCheckbox.addEventListener('change', () => {
-            gameDurationInput.disabled = limitlessTimeCheckbox.checked;
-            gameDurationInput.style.opacity = limitlessTimeCheckbox.checked ? '0.5' : '1';
-        });
-
-        // --- Canvas Resizing & Scaling Setup ---
-        function resizeCanvas() {
-            const aspectRatio = ORIGINAL_CANVAS_WIDTH / ORIGINAL_CANVAS_HEIGHT;
-            let newWidth, newHeight;
-
-            // Use 90% of viewport width and 70% of viewport height (to leave space for UI/controls)
-            const maxGameAreaWidth = window.innerWidth * 0.9;
-            const maxGameAreaHeight = window.innerHeight * 0.7; // More space for mobile controls
-
-            if (maxGameAreaWidth / maxGameAreaHeight > aspectRatio) {
-                // Window is wider than game, constrained by height
-                newHeight = maxGameAreaHeight;
-                newWidth = newHeight * aspectRatio;
-            } else {
-                // Window is taller than game, constrained by width
-                newWidth = maxGameAreaWidth;
-                newHeight = newWidth / aspectRatio;
-            }
-
-            canvas.width = newWidth;
-            canvas.height = newHeight;
-
-            // Set game container dimensions to match canvas
-            gameContainer.style.width = `${newWidth}px`;
-            gameContainer.style.height = `${newHeight}px`;
-
-            // Update global scaling factors
-            scaleX = canvas.width / ORIGINAL_CANVAS_WIDTH;
-            scaleY = canvas.height / ORIGINAL_CANVAS_HEIGHT;
+    function findBestMove() {
+      // 1. Win if possible
+      for (let i = 0; i < 9; i++) {
+        if (!cells[i]) {
+          cells[i] = 'O';
+          if (checkWinSilent('O')) return (cells[i] = '', i);
+          cells[i] = '';
         }
-
-        // --- Drawing Functions (all apply scaling for rendering) ---
-        function drawBasket() {
-            ctx.fillStyle = basket.color;
-            ctx.fillRect(basket.x * scaleX, basket.y * scaleY, basket.width * scaleX, basket.height * scaleY);
+      }
+      // 2. Block opponent
+      for (let i = 0; i < 9; i++) {
+        if (!cells[i]) {
+          cells[i] = 'X';
+          if (checkWinSilent('X')) return (cells[i] = '', i);
+          cells[i] = '';
         }
+      }
+      // 3. Take center
+      if (!cells[4]) return 4;
+      // 4. Take a corner
+      const corners = [0, 2, 6, 8];
+      for (let c of corners) if (!cells[c]) return c;
+      // 5. Take any empty
+      return cells.findIndex(cell => cell === '');
+    }
 
-        function drawStar(star) {
-            ctx.save();
-            ctx.fillStyle = '#FFFF00';
-            ctx.strokeStyle = '#FFD700';
-            ctx.lineWidth = 2 * Math.min(scaleX, scaleY); // Scale line width proportionally
-
-            const x = star.x * scaleX;
-            const y = star.y * scaleY;
-            const outerRadius = star.radius * Math.min(scaleX, scaleY); // Use min scale for circular items
-            const innerRadius = outerRadius / 2.5;
-            const numPoints = 5;
-
-            ctx.globalAlpha = 0.8 + Math.sin(Date.now() * 0.005 + star.x) * 0.2;
-
-            ctx.beginPath();
-            for (let i = 0; i < numPoints * 2; i++) {
-                const angle = Math.PI / numPoints * i;
-                const r = (i % 2 === 0) ? outerRadius : innerRadius;
-                const currentX = x + Math.cos(angle - Math.PI / 2) * r;
-                const currentY = y + Math.sin(angle - Math.PI / 2) * r;
-                if (i === 0) {
-                    ctx.moveTo(currentX, currentY);
-                } else {
-                    ctx.lineTo(currentX, currentY);
-                }
-            }
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-            ctx.restore();
+    function checkWin(player) {
+      const wins = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+      ];
+      return wins.some(([a,b,c]) => {
+        if (cells[a] === player && cells[b] === player && cells[c] === player) {
+          [a,b,c].forEach(i => board.children[i].style.backgroundColor = '#4caf50');
+          return true;
         }
+        return false;
+      });
+    }
 
-        function drawHeart(heart) {
-            ctx.fillStyle = '#e74c3c';
-            ctx.beginPath();
-            const x = heart.x * scaleX;
-            const y = heart.y * scaleY;
-            const size = heart.size * Math.min(scaleX, scaleY); // Use min scale for circular items
+    function checkWinSilent(player) {
+      const wins = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+      ];
+      return wins.some(([a,b,c]) => cells[a] === player && cells[b] === player && cells[c] === player);
+    }
 
-            // Heart shape drawing commands (relative to scaled x,y,size)
-            ctx.moveTo(x, y + size / 4);
-            ctx.quadraticCurveTo(x + size / 2, y - size / 2, x + size, y + size / 4);
-            ctx.quadraticCurveTo(x + size, y + size, x, y + size);
-            ctx.quadraticCurveTo(x - size, y + size, x - size, y + size / 4);
-            ctx.quadraticCurveTo(x - size / 2, y - size / 2, x, y + size / 4);
-            ctx.closePath();
-            ctx.fill();
-            ctx.strokeStyle = '#c0392b';
-            ctx.lineWidth = 2 * Math.min(scaleX, scaleY);
-            ctx.stroke();
-        }
-
-        function drawBackground() {
-            ctx.fillStyle = '#0d1a26';
-            ctx.fillRect(0, 0, canvas.width, canvas.height); // Fill entire canvas
-        }
-
-        // Particle effect for catching
-        function createParticles(originalX, originalY, color) {
-            for (let i = 0; i < 10; i++) {
-                particles.push({
-                    // Particles' initial positions are scaled, velocities and radii are scaled too
-                    x: originalX * scaleX,
-                    y: originalY * scaleY,
-                    radius: (Math.random() * 3 + 1) * Math.min(scaleX, scaleY),
-                    color: color,
-                    vx: (Math.random() - 0.5) * 5 * scaleX, // Scale velocity according to axis
-                    vy: (Math.random() - 0.5) * 5 * scaleY,
-                    alpha: 1
-                });
-            }
-        }
-
-        function updateParticles() {
-            for (let i = 0; i < particles.length; i++) {
-                const p = particles[i];
-                p.x += p.vx;
-                p.y += p.vy;
-                p.alpha -= 0.03;
-                p.radius -= 0.05;
-
-                if (p.alpha <= 0 || p.radius <= 0) {
-                    particles.splice(i, 1);
-                    i--;
-                }
-            }
-        }
-
-        function drawParticles() {
-            particles.forEach(p => {
-                ctx.save();
-                ctx.globalAlpha = p.alpha;
-                ctx.fillStyle = p.color;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.restore();
-            });
-        }
-
-        // --- Game Logic Functions (all operate on ORIGINAL coordinates) ---
-
-        function updateBasket() {
-            let moving = false;
-            // Movement applied to original X, then scaled by current scaleX for visual speed
-            if (keys['ArrowLeft'] || keys['a']) {
-                basket.x -= basket.speed; // basket.speed is ORIGINAL_BASKET_SPEED
-                moving = true;
-            }
-            if (keys['ArrowRight'] || keys['d']) {
-                basket.x += basket.speed;
-                moving = true;
-            }
-
-            // Keep basket within original canvas bounds
-            if (basket.x < 0) {
-                basket.x = 0;
-            }
-            if (basket.x + basket.width > ORIGINAL_CANVAS_WIDTH) {
-                basket.x = ORIGINAL_CANVAS_WIDTH - basket.width;
-            }
-
-            basket.color = moving ? '#A0522D' : '#8B4513';
-        }
-
-        function spawnStar() {
-            const radius = STAR_MIN_ORIGINAL_RADIUS + Math.random() * (STAR_MAX_ORIGINAL_RADIUS - STAR_MIN_ORIGINAL_RADIUS);
-            const x = Math.random() * (ORIGINAL_CANVAS_WIDTH - radius * 2) + radius;
-            stars.push({
-                type: 'star',
-                x: x,
-                y: -radius, // Start above original canvas
-                radius: radius,
-                speed: currentStarSpeed // currentStarSpeed is an ORIGINAL value
-            });
-        }
-
-        function spawnLifeline() {
-            const x = Math.random() * (ORIGINAL_CANVAS_WIDTH - LIFELINE_ORIGINAL_SIZE);
-            lifelines.push({
-                type: 'lifeline',
-                x: x,
-                y: -LIFELINE_ORIGINAL_SIZE, // Start above original canvas
-                size: LIFELINE_ORIGINAL_SIZE,
-                speed: LIFELINE_ORIGINAL_SPEED // LIFELINE_ORIGINAL_SPEED is an ORIGINAL value
-            });
-        }
-
-        function updateFallingObjects() {
-            // Update Stars
-            for (let i = 0; i < stars.length; i++) {
-                // Apply scaled speed to original Y position
-                stars[i].y += stars[i].speed * scaleY;
-
-                // Collision detection with basket (all calculations in ORIGINAL coordinates)
-                if (
-                    stars[i].y + stars[i].radius > basket.y &&
-                    stars[i].y - stars[i].radius < basket.y + basket.height &&
-                    stars[i].x + stars[i].radius > basket.x &&
-                    stars[i].x - stars[i].radius < basket.x + basket.width
-                ) {
-                    score++;
-                    scoreDisplay.textContent = `SCORE: ${score}`;
-                    createParticles(stars[i].x, stars[i].y, '#FFFF00'); // Pass original coords for particle creation
-                    stars.splice(i, 1);
-                    i--;
-                } else if (stars[i].y - stars[i].radius > ORIGINAL_CANVAS_HEIGHT) { // Check against original canvas height
-                    currentLifelines--;
-                    lifelinesDisplay.textContent = `LIFELINES: ${currentLifelines}`;
-                    stars.splice(i, 1);
-                    i--;
-
-                    if (currentLifelines <= 0) {
-                        endGame("You ran out of lifelines!");
-                    }
-                }
-            }
-
-            // Update Lifelines
-            for (let i = 0; i < lifelines.length; i++) {
-                // Apply scaled speed to original Y position
-                lifelines[i].y += lifelines[i].speed * scaleY;
-
-                // Collision detection with basket for lifelines (all calculations in ORIGINAL coordinates)
-                if (
-                    lifelines[i].y + lifelines[i].size > basket.y &&
-                    lifelines[i].y < basket.y + basket.height &&
-                    lifelines[i].x + lifelines[i].size > basket.x &&
-                    lifelines[i].x < basket.x + basket.width
-                ) {
-                    if (currentLifelines < maxLifelines) {
-                        currentLifelines++;
-                        lifelinesDisplay.textContent = `LIFELINES: ${currentLifelines}`;
-                        createParticles(lifelines[i].x + lifelines[i].size / 2, lifelines[i].y + lifelines[i].size / 2, '#e74c3c');
-                    }
-                    lifelines.splice(i, 1);
-                    i--;
-                } else if (lifelines[i].y > ORIGINAL_CANVAS_HEIGHT) { // Check against original canvas height
-                    lifelines.splice(i, 1);
-                    i--;
-                }
-            }
-        }
-
-        function gameLoop() {
-            if (!gameRunning || gamePaused) return;
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawBackground();
-
-            updateBasket();
-            updateFallingObjects();
-            updateParticles();
-
-            drawBasket();
-            stars.forEach(star => drawStar(star));
-            lifelines.forEach(lifeline => drawHeart(lifeline));
-            drawParticles();
-
-            requestAnimationFrame(gameLoop);
-        }
-
-        function togglePause() {
-            if (!gameRunning) return;
-            gamePaused = !gamePaused;
-
-            if (gamePaused) {
-                clearInterval(gameInterval);
-                clearInterval(starSpawnInterval);
-                clearInterval(lifelineSpawnInterval);
-                pauseButton.textContent = 'Resume';
-            } else {
-                gameInterval = setInterval(gameTimer, 1000);
-                starSpawnInterval = setInterval(spawnStar, currentStarSpawnRate);
-                lifelineSpawnInterval = setInterval(spawnLifeline, LIFELINE_ORIGINAL_SPAWN_RATE); // Use original spawn rate here
-                pauseButton.textContent = 'Pause';
-                requestAnimationFrame(gameLoop);
-            }
-        }
-
-        function gameTimer() {
-             if (isLimitlessTime) {
-                timeLeft++;
-                const minutes = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-                const seconds = (timeLeft % 60).toString().padStart(2, '0');
-                timerDisplay.textContent = `TIME: ${minutes}:${seconds}`;
-            } else {
-                timeLeft--;
-                timerDisplay.textContent = `TIME: ${timeLeft}`;
-                if (timeLeft <= 0) {
-                    endGame("Time's Up!");
-                }
-            }
-
-            const timePassed = isLimitlessTime ? timeLeft : initialGameDuration - timeLeft;
-            if (timePassed > 0 && timePassed % DIFFICULTY_INCREASE_INTERVAL === 0) {
-                if (currentStarSpawnRate > MIN_ORIGINAL_SPAWN_RATE) {
-                    currentStarSpawnRate = Math.max(MIN_ORIGINAL_SPAWN_RATE, currentStarSpawnRate - SPAWN_RATE_DECREASE_STEP);
-                    clearInterval(starSpawnInterval);
-                    starSpawnInterval = setInterval(spawnStar, currentStarSpawnRate);
-                }
-                currentStarSpeed += STAR_SPEED_INCREASE_STEP; // Increase original speed value
-            }
-        }
-
-        function startGame(isRetry = false) {
-            isLimitlessTime = limitlessTimeCheckbox.checked;
-
-            if (!isRetry && !isLimitlessTime) {
-                const duration = parseInt(gameDurationInput.value);
-                if (isNaN(duration) || duration < 10) {
-                    alert("Please enter a valid game duration (minimum 10 seconds).");
-                    return;
-                }
-                initialGameDuration = duration;
-            } else if (isLimitlessTime) {
-                timeLeft = 0;
-            } else if (isRetry) {
-                timeLeft = isLimitlessTime ? 0 : initialGameDuration;
-            }
-
-            score = 0;
-            currentLifelines = maxLifelines;
-            stars = [];
-            lifelines = [];
-            particles = [];
-            gameRunning = true;
-            gamePaused = false;
-
-            // Reset game values to their original definitions
-            currentStarSpawnRate = ORIGINAL_STAR_SPAWN_RATE;
-            currentStarSpeed = STAR_ORIGINAL_SPEED;
-            
-            // Reset basket to its original logical state
-            basket.x = (ORIGINAL_CANVAS_WIDTH / 2) - (BASKET_ORIGINAL_WIDTH / 2);
-            basket.y = ORIGINAL_CANVAS_HEIGHT - BASKET_ORIGINAL_Y_OFFSET;
-            basket.width = BASKET_ORIGINAL_WIDTH;
-            basket.height = BASKET_ORIGINAL_HEIGHT;
-            basket.speed = BASKET_ORIGINAL_SPEED;
-            basket.color = '#8B4513';
-
-            scoreDisplay.textContent = `SCORE: ${score}`;
-            lifelinesDisplay.textContent = `LIFELINES: ${currentLifelines}`;
-            timerDisplay.textContent = `TIME: ${isLimitlessTime ? '00:00' : timeLeft}`;
-            gameOverScreen.style.display = 'none';
-            startScreen.style.display = 'none';
-            pauseButton.style.display = 'block';
-
-            clearInterval(gameInterval);
-            clearInterval(starSpawnInterval);
-            clearInterval(lifelineSpawnInterval);
-
-            gameInterval = setInterval(gameTimer, 1000);
-            starSpawnInterval = setInterval(spawnStar, currentStarSpawnRate);
-            lifelineSpawnInterval = setInterval(spawnLifeline, LIFELINE_ORIGINAL_SPAWN_RATE);
-
-            requestAnimationFrame(gameLoop);
-        }
-
-        function endGame(message) {
-            gameRunning = false;
-            gamePaused = true;
-            clearInterval(gameInterval);
-            clearInterval(starSpawnInterval);
-            clearInterval(lifelineSpawnInterval);
-            
-            gameOverScreen.style.display = 'flex';
-            gameOverMessage.textContent = message;
-            finalScoreDisplay.textContent = `Your Score: ${score}`;
-            pauseButton.style.display = 'none';
-            
-            if (!isLimitlessTime && timeLeft < 0) timeLeft = 0;
-            if (isLimitlessTime) {
-                const minutes = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-                const seconds = (timeLeft % 60).toString().padStart(2, '0');
-                timerDisplay.textContent = `TIME: ${minutes}:${seconds}`;
-            } else {
-                timerDisplay.textContent = `TIME: ${timeLeft}`;
-            }
-        }
-
-        // --- Event Listeners ---
-        startGameBtn.addEventListener('click', () => startGame(false));
-        playAgainBtn.addEventListener('click', () => {
-            gameOverScreen.style.display = 'none';
-            startScreen.style.display = 'flex';
-        });
-        retryBtn.addEventListener('click', () => {
-            startGame(true);
-        });
-        pauseButton.addEventListener('click', togglePause);
-
-        // Mobile controls (explicit buttons)
-        leftControlBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys['ArrowLeft'] = true; });
-        leftControlBtn.addEventListener('touchend', (e) => { e.preventDefault(); keys['ArrowLeft'] = false; });
-        leftControlBtn.addEventListener('touchcancel', (e) => { e.preventDefault(); keys['ArrowLeft'] = false; });
-
-        rightControlBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys['ArrowRight'] = true; });
-        rightControlBtn.addEventListener('touchend', (e) => { e.preventDefault(); keys['ArrowRight'] = false; });
-        rightControlBtn.addEventListener('touchcancel', (e) => { e.preventDefault(); keys['ArrowRight'] = false; });
-
-        // New on-canvas touch/click control areas
-        function addControlListeners(element, keyName) {
-            const startHandler = (e) => { e.preventDefault(); keys[keyName] = true; };
-            const endHandler = (e) => { e.preventDefault(); keys[keyName] = false; };
-
-            element.addEventListener('touchstart', startHandler);
-            element.addEventListener('touchend', endHandler);
-            element.addEventListener('touchcancel', endHandler); // Important for touches leaving the area
-
-            element.addEventListener('mousedown', startHandler);
-            element.addEventListener('mouseup', endHandler);
-            element.addEventListener('mouseleave', (e) => { if (e.buttons === 1) keys[keyName] = false; }); // If mouse button is held and leaves element
-        }
-
-        addControlListeners(leftCanvasControl, 'ArrowLeft');
-        addControlListeners(rightCanvasControl, 'ArrowRight');
-
-        // Initial setup on page load
-        window.addEventListener('load', resizeCanvas); // Set initial canvas size
-        window.addEventListener('resize', resizeCanvas); // Adjust canvas on window resize
-    </script>
+    startGame();
+  </script>
 </body>
 </html>
